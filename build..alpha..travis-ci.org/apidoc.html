@@ -1,0 +1,492 @@
+<div class="apidocDiv">
+<style>
+/*csslint
+*/
+.apidocDiv {
+    background: #fff;
+    font-family: Arial, Helvetica, sans-serif;
+}
+.apidocDiv a[href] {
+    color: #33f;
+    font-weight: bold;
+    text-decoration: none;
+}
+.apidocDiv a[href]:hover {
+    text-decoration: underline;
+}
+.apidocCodeCommentSpan {
+    background: #bbf;
+    color: #000;
+    display: block;
+}
+.apidocCodeKeywordSpan {
+    color: #d00;
+    font-weight: bold;
+}
+.apidocCodePre {
+    background: #eef;
+    border: 1px solid;
+    color: #777;
+    padding: 5px;
+    white-space: pre-wrap;
+}
+.apidocFooterDiv {
+    margin-top: 20px;
+    text-align: center;
+}
+.apidocModuleLi {
+    margin-top: 10px;
+}
+.apidocSectionDiv {
+    border-top: 1px solid;
+    margin-top: 20px;
+}
+.apidocSignatureSpan {
+    color: #777;
+    font-weight: bold;
+}
+</style>
+<h1>api documentation for
+    <a
+
+        href="https://synsem.com/EMS.js"
+
+    >ems (v1.4.4)</a>
+</h1>
+<h4>Persistent Shared Memory and Parallel Programming Model</h4>
+<div class="apidocSectionDiv"><a
+    href="#apidoc.tableOfContents"
+    id="apidoc.tableOfContents"
+><h1>table of contents</h1></a><ol>
+
+    <li class="apidocModuleLi"><a href="#apidoc.module.ems">module ems</a><ol>
+
+        <li>
+
+            <a class="apidocElementLiA" href="#apidoc.element.ems.ems">
+            function <span class="apidocSignatureSpan"></span>ems
+            <span class="apidocSignatureSpan">(nThreadsArg, pinThreadsArg, threadingType, filename)</span>
+            </a>
+
+        </li>
+
+        <li>
+
+            <a class="apidocElementLiA" href="#apidoc.element.ems.initialize">
+            function <span class="apidocSignatureSpan">ems.</span>initialize
+            <span class="apidocSignatureSpan">(nThreadsArg, pinThreadsArg, threadingType, filename)</span>
+            </a>
+
+        </li>
+
+    </ol></li>
+
+    <li class="apidocModuleLi"><a href="#apidoc.module.ems.initialize">module ems.initialize</a><ol>
+
+        <li>
+
+            <a class="apidocElementLiA" href="#apidoc.element.ems.initialize.initialize">
+            function <span class="apidocSignatureSpan">ems.</span>initialize
+            <span class="apidocSignatureSpan">(nThreadsArg, pinThreadsArg, threadingType, filename)</span>
+            </a>
+
+        </li>
+
+    </ol></li>
+
+</ol></div>
+
+<div class="apidocSectionDiv">
+<h1><a href="#apidoc.module.ems" id="apidoc.module.ems">module ems</a></h1>
+
+
+    <h2>
+        <a href="#apidoc.element.ems.ems" id="apidoc.element.ems.ems">
+        function <span class="apidocSignatureSpan"></span>ems
+        <span class="apidocSignatureSpan">(nThreadsArg, pinThreadsArg, threadingType, filename)</span>
+        </a>
+    </h2>
+    <ul>
+    <li>description and source-code<pre class="apidocCodePre">function ems_wrapper(nThreadsArg, pinThreadsArg, threadingType, filename) {
+    var retObj = {tasks: []};
+
+    // TODO: Determining the thread ID should be done via shared memory
+    if (process.env.EMS_Subtask != undefined ) {
+        retObj.myID = parseInt(process.env.EMS_Subtask);
+    } else {
+        retObj.myID = 0;
+    }
+
+    var pinThreads = false;
+    if (typeof pinThreadsArg === &#x22;boolean&#x22;) {
+        pinThreads = pinThreadsArg;
+    }
+
+    var nThreads;
+    nThreads = parseInt(nThreadsArg);
+    if (!(nThreads &#x3e; 0)) {
+        if (process.env.EMS_Ntasks != undefined) {
+            nThreads = parseInt(process.env.EMS_Ntasks);
+        } else {
+            console.log(&#x22;EMS: Must declare number of nodes to use.  Input:&#x22; + nThreadsArg);
+            process.exit(1);
+        }
+    }
+
+    var domainName = &#x22;/EMS_MainDomain&#x22;;
+    if (filename) domainName = filename;
+    //  All arguments are defined -- now do the EMS initialization
+    retObj.data = EMS.initialize(0, 0, // 0= # elements, 1=Heap Size
+        false, // 2 = useMap
+        domainName, false, false,  // 3=name, 4=persist, 5=useExisting
+        false, false, undefined,  //  6=doDataFill, 7=fillIsJSON, 8=fillValue
+        false, false,  retObj.myID, //  9=doSetFEtags, 10=setFEtags, 11=EMS myID
+        pinThreads, nThreads, 99);  // 12=pinThread,  13=nThreads, 14=pctMlock
+
+    var targetScript;
+    switch (threadingType) {
+        case undefined:
+        case &#x22;bsp&#x22;:
+            targetScript = process.argv[1];
+            threadingType = &#x22;bsp&#x22;;
+            retObj.inParallelContext = true;
+            break;
+        case &#x22;fj&#x22;:
+            targetScript = &#x22;./EMSthreadStub&#x22;;
+            retObj.inParallelContext = false;
+            break;
+        case &#x22;user&#x22;:
+            targetScript = undefined;
+            retObj.inParallelContext = false;
+            break;
+        default:
+            console.log(&#x22;EMS: Unknown threading model type:&#x22;, threadingType);
+            retObj.inParallelContext = false;
+            break;
+    }
+
+    //  The master thread has completed initialization, other threads may now
+    //  safely execute.
+    if (targetScript !== undefined &#x26;&#x26; retObj.myID == 0) {
+        var emsThreadStub =
+            &#x22;// Automatically Generated EMS Slave Thread Script\n&#x22; +
+            &#x22;// To edit this file, see ems.js:emsThreadStub()\n&#x22; +
+            &#x22;var ems = require(\&#x22;ems\&#x22;)(parseInt(process.env.EMS_Ntasks));\n&#x22; +
+            &#x22;process.on(\&#x22;message\&#x22;, function(msg) {\n&#x22; +
+            &#x22;    eval(\&#x22;func = \&#x22; + msg.func);\n&#x22; +
+            &#x22;    func.apply(null, msg.args);\n&#x22; +
+            &#x22;} );\n&#x22;;
+        fs.writeFileSync(&#x27;./EMSthreadStub.js&#x27;, emsThreadStub, {flag: &#x27;w+&#x27;});
+        process.env.EMS_Ntasks = nThreads;
+        for (var taskN = 1; taskN &#x3c; nThreads; taskN++) {
+            process.env.EMS_Subtask = taskN;
+            retObj.tasks.push(
+                child_process.fork(targetScript,
+                    process.argv.slice(2, process.argv.length)));
+        }
+    }
+
+    retObj.nThreads = nThreads;
+    retObj.threadingType = threadingType;
+    retObj.pinThreads = pinThreads;
+    retObj.domainName = domainName;
+    retObj.newRegionN = 0;
+    retObj.init = EMS.initialize;
+    retObj.new = EMSnew;
+    retObj.critical = EMScritical;
+    retObj.criticalEnter = EMS.criticalEnter;
+    retObj.criticalExit  = EMS.criticalExit;
+    retObj.master = EMSmaster;
+    retObj.single = EMSsingle;
+    retObj.diag = EMSdiag;
+    retObj.parallel = EMSparallel;
+    retObj.barrier = EMSbarrier;
+    retObj.parForEach = EMSparForEach;
+    retObj.tmStart = EMStmStart;
+    retObj.tmEnd = EMStmEnd;
+    retObj.loopInit = EMS.loopInit;
+    retObj.loopChunk = EMS.loopChunk;
+    EMSglobal = retObj;
+    return retObj;
+}</pre></li>
+    <li>example usage<pre class="apidocCodePre">n/a</pre></li>
+    </ul>
+
+
+
+    <h2>
+        <a href="#apidoc.element.ems.initialize" id="apidoc.element.ems.initialize">
+        function <span class="apidocSignatureSpan">ems.</span>initialize
+        <span class="apidocSignatureSpan">(nThreadsArg, pinThreadsArg, threadingType, filename)</span>
+        </a>
+    </h2>
+    <ul>
+    <li>description and source-code<pre class="apidocCodePre">function ems_wrapper(nThreadsArg, pinThreadsArg, threadingType, filename) {
+    var retObj = {tasks: []};
+
+    // TODO: Determining the thread ID should be done via shared memory
+    if (process.env.EMS_Subtask != undefined ) {
+        retObj.myID = parseInt(process.env.EMS_Subtask);
+    } else {
+        retObj.myID = 0;
+    }
+
+    var pinThreads = false;
+    if (typeof pinThreadsArg === &#x22;boolean&#x22;) {
+        pinThreads = pinThreadsArg;
+    }
+
+    var nThreads;
+    nThreads = parseInt(nThreadsArg);
+    if (!(nThreads &#x3e; 0)) {
+        if (process.env.EMS_Ntasks != undefined) {
+            nThreads = parseInt(process.env.EMS_Ntasks);
+        } else {
+            console.log(&#x22;EMS: Must declare number of nodes to use.  Input:&#x22; + nThreadsArg);
+            process.exit(1);
+        }
+    }
+
+    var domainName = &#x22;/EMS_MainDomain&#x22;;
+    if (filename) domainName = filename;
+    //  All arguments are defined -- now do the EMS initialization
+    retObj.data = EMS.initialize(0, 0, // 0= # elements, 1=Heap Size
+        false, // 2 = useMap
+        domainName, false, false,  // 3=name, 4=persist, 5=useExisting
+        false, false, undefined,  //  6=doDataFill, 7=fillIsJSON, 8=fillValue
+        false, false,  retObj.myID, //  9=doSetFEtags, 10=setFEtags, 11=EMS myID
+        pinThreads, nThreads, 99);  // 12=pinThread,  13=nThreads, 14=pctMlock
+
+    var targetScript;
+    switch (threadingType) {
+        case undefined:
+        case &#x22;bsp&#x22;:
+            targetScript = process.argv[1];
+            threadingType = &#x22;bsp&#x22;;
+            retObj.inParallelContext = true;
+            break;
+        case &#x22;fj&#x22;:
+            targetScript = &#x22;./EMSthreadStub&#x22;;
+            retObj.inParallelContext = false;
+            break;
+        case &#x22;user&#x22;:
+            targetScript = undefined;
+            retObj.inParallelContext = false;
+            break;
+        default:
+            console.log(&#x22;EMS: Unknown threading model type:&#x22;, threadingType);
+            retObj.inParallelContext = false;
+            break;
+    }
+
+    //  The master thread has completed initialization, other threads may now
+    //  safely execute.
+    if (targetScript !== undefined &#x26;&#x26; retObj.myID == 0) {
+        var emsThreadStub =
+            &#x22;// Automatically Generated EMS Slave Thread Script\n&#x22; +
+            &#x22;// To edit this file, see ems.js:emsThreadStub()\n&#x22; +
+            &#x22;var ems = require(\&#x22;ems\&#x22;)(parseInt(process.env.EMS_Ntasks));\n&#x22; +
+            &#x22;process.on(\&#x22;message\&#x22;, function(msg) {\n&#x22; +
+            &#x22;    eval(\&#x22;func = \&#x22; + msg.func);\n&#x22; +
+            &#x22;    func.apply(null, msg.args);\n&#x22; +
+            &#x22;} );\n&#x22;;
+        fs.writeFileSync(&#x27;./EMSthreadStub.js&#x27;, emsThreadStub, {flag: &#x27;w+&#x27;});
+        process.env.EMS_Ntasks = nThreads;
+        for (var taskN = 1; taskN &#x3c; nThreads; taskN++) {
+            process.env.EMS_Subtask = taskN;
+            retObj.tasks.push(
+                child_process.fork(targetScript,
+                    process.argv.slice(2, process.argv.length)));
+        }
+    }
+
+    retObj.nThreads = nThreads;
+    retObj.threadingType = threadingType;
+    retObj.pinThreads = pinThreads;
+    retObj.domainName = domainName;
+    retObj.newRegionN = 0;
+    retObj.init = EMS.initialize;
+    retObj.new = EMSnew;
+    retObj.critical = EMScritical;
+    retObj.criticalEnter = EMS.criticalEnter;
+    retObj.criticalExit  = EMS.criticalExit;
+    retObj.master = EMSmaster;
+    retObj.single = EMSsingle;
+    retObj.diag = EMSdiag;
+    retObj.parallel = EMSparallel;
+    retObj.barrier = EMSbarrier;
+    retObj.parForEach = EMSparForEach;
+    retObj.tmStart = EMStmStart;
+    retObj.tmEnd = EMStmEnd;
+    retObj.loopInit = EMS.loopInit;
+    retObj.loopChunk = EMS.loopChunk;
+    EMSglobal = retObj;
+    return retObj;
+}</pre></li>
+    <li>example usage<pre class="apidocCodePre">...
+    &#x3c;td colspan=3 class=&#x22;Proto&#x22; style=&#x22;padding-bottom: 20px;&#x22;&#x3e;require(&#x27;ems&#x27;) ( nThreads [,
+threadAffinity [,
+        parallelType [, contextName ] ] ] )
+    &#x3c;/td&#x3e;
+&#x3c;/tr&#x3e;
+&#x3c;tr class=&#x22;apiFunc&#x22;&#x3e;
+    &#x3c;td class=&#x22;Label&#x22;&#x3e;Python&#x3c;/td&#x3e;
+    &#x3c;td colspan=3 class=&#x22;Proto&#x22; style=&#x22;padding-bottom: 20px;&#x22;&#x3e;import ems&#x3c;br&#x3e;
+        ems.<span class="apidocCodeKeywordSpan">initialize</span>( nThreads [, threadAffinity [, parallelType [, contextName ] ] ] )
+    &#x3c;/td&#x3e;
+&#x3c;/tr&#x3e;
+&#x3c;tr class=&#x22;apiFunc&#x22;&#x3e;
+    &#x3c;td class=&#x22;Label&#x22;&#x3e;C&#x3c;/td&#x3e;
+    &#x3c;td colspan=3 class=&#x22;Proto&#x22; style=&#x22;padding-bottom: 20px;&#x22;&#x3e;#include &#x22;ems.h&#x22;  // Parallelism
+ in C is always user managed
+    &#x3c;/td&#x3e;
+&#x3c;/tr&#x3e;
+...</pre></li>
+    </ul>
+
+
+</div>
+
+<div class="apidocSectionDiv">
+<h1><a href="#apidoc.module.ems.initialize" id="apidoc.module.ems.initialize">module ems.initialize</a></h1>
+
+
+    <h2>
+        <a href="#apidoc.element.ems.initialize.initialize" id="apidoc.element.ems.initialize.initialize">
+        function <span class="apidocSignatureSpan">ems.</span>initialize
+        <span class="apidocSignatureSpan">(nThreadsArg, pinThreadsArg, threadingType, filename)</span>
+        </a>
+    </h2>
+    <ul>
+    <li>description and source-code<pre class="apidocCodePre">function ems_wrapper(nThreadsArg, pinThreadsArg, threadingType, filename) {
+    var retObj = {tasks: []};
+
+    // TODO: Determining the thread ID should be done via shared memory
+    if (process.env.EMS_Subtask != undefined ) {
+        retObj.myID = parseInt(process.env.EMS_Subtask);
+    } else {
+        retObj.myID = 0;
+    }
+
+    var pinThreads = false;
+    if (typeof pinThreadsArg === &#x22;boolean&#x22;) {
+        pinThreads = pinThreadsArg;
+    }
+
+    var nThreads;
+    nThreads = parseInt(nThreadsArg);
+    if (!(nThreads &#x3e; 0)) {
+        if (process.env.EMS_Ntasks != undefined) {
+            nThreads = parseInt(process.env.EMS_Ntasks);
+        } else {
+            console.log(&#x22;EMS: Must declare number of nodes to use.  Input:&#x22; + nThreadsArg);
+            process.exit(1);
+        }
+    }
+
+    var domainName = &#x22;/EMS_MainDomain&#x22;;
+    if (filename) domainName = filename;
+    //  All arguments are defined -- now do the EMS initialization
+    retObj.data = EMS.initialize(0, 0, // 0= # elements, 1=Heap Size
+        false, // 2 = useMap
+        domainName, false, false,  // 3=name, 4=persist, 5=useExisting
+        false, false, undefined,  //  6=doDataFill, 7=fillIsJSON, 8=fillValue
+        false, false,  retObj.myID, //  9=doSetFEtags, 10=setFEtags, 11=EMS myID
+        pinThreads, nThreads, 99);  // 12=pinThread,  13=nThreads, 14=pctMlock
+
+    var targetScript;
+    switch (threadingType) {
+        case undefined:
+        case &#x22;bsp&#x22;:
+            targetScript = process.argv[1];
+            threadingType = &#x22;bsp&#x22;;
+            retObj.inParallelContext = true;
+            break;
+        case &#x22;fj&#x22;:
+            targetScript = &#x22;./EMSthreadStub&#x22;;
+            retObj.inParallelContext = false;
+            break;
+        case &#x22;user&#x22;:
+            targetScript = undefined;
+            retObj.inParallelContext = false;
+            break;
+        default:
+            console.log(&#x22;EMS: Unknown threading model type:&#x22;, threadingType);
+            retObj.inParallelContext = false;
+            break;
+    }
+
+    //  The master thread has completed initialization, other threads may now
+    //  safely execute.
+    if (targetScript !== undefined &#x26;&#x26; retObj.myID == 0) {
+        var emsThreadStub =
+            &#x22;// Automatically Generated EMS Slave Thread Script\n&#x22; +
+            &#x22;// To edit this file, see ems.js:emsThreadStub()\n&#x22; +
+            &#x22;var ems = require(\&#x22;ems\&#x22;)(parseInt(process.env.EMS_Ntasks));\n&#x22; +
+            &#x22;process.on(\&#x22;message\&#x22;, function(msg) {\n&#x22; +
+            &#x22;    eval(\&#x22;func = \&#x22; + msg.func);\n&#x22; +
+            &#x22;    func.apply(null, msg.args);\n&#x22; +
+            &#x22;} );\n&#x22;;
+        fs.writeFileSync(&#x27;./EMSthreadStub.js&#x27;, emsThreadStub, {flag: &#x27;w+&#x27;});
+        process.env.EMS_Ntasks = nThreads;
+        for (var taskN = 1; taskN &#x3c; nThreads; taskN++) {
+            process.env.EMS_Subtask = taskN;
+            retObj.tasks.push(
+                child_process.fork(targetScript,
+                    process.argv.slice(2, process.argv.length)));
+        }
+    }
+
+    retObj.nThreads = nThreads;
+    retObj.threadingType = threadingType;
+    retObj.pinThreads = pinThreads;
+    retObj.domainName = domainName;
+    retObj.newRegionN = 0;
+    retObj.init = EMS.initialize;
+    retObj.new = EMSnew;
+    retObj.critical = EMScritical;
+    retObj.criticalEnter = EMS.criticalEnter;
+    retObj.criticalExit  = EMS.criticalExit;
+    retObj.master = EMSmaster;
+    retObj.single = EMSsingle;
+    retObj.diag = EMSdiag;
+    retObj.parallel = EMSparallel;
+    retObj.barrier = EMSbarrier;
+    retObj.parForEach = EMSparForEach;
+    retObj.tmStart = EMStmStart;
+    retObj.tmEnd = EMStmEnd;
+    retObj.loopInit = EMS.loopInit;
+    retObj.loopChunk = EMS.loopChunk;
+    EMSglobal = retObj;
+    return retObj;
+}</pre></li>
+    <li>example usage<pre class="apidocCodePre">...
+    &#x3c;td colspan=3 class=&#x22;Proto&#x22; style=&#x22;padding-bottom: 20px;&#x22;&#x3e;require(&#x27;ems&#x27;) ( nThreads [,
+threadAffinity [,
+        parallelType [, contextName ] ] ] )
+    &#x3c;/td&#x3e;
+&#x3c;/tr&#x3e;
+&#x3c;tr class=&#x22;apiFunc&#x22;&#x3e;
+    &#x3c;td class=&#x22;Label&#x22;&#x3e;Python&#x3c;/td&#x3e;
+    &#x3c;td colspan=3 class=&#x22;Proto&#x22; style=&#x22;padding-bottom: 20px;&#x22;&#x3e;import ems&#x3c;br&#x3e;
+        ems.<span class="apidocCodeKeywordSpan">initialize</span>( nThreads [, threadAffinity [, parallelType [, contextName ] ] ] )
+    &#x3c;/td&#x3e;
+&#x3c;/tr&#x3e;
+&#x3c;tr class=&#x22;apiFunc&#x22;&#x3e;
+    &#x3c;td class=&#x22;Label&#x22;&#x3e;C&#x3c;/td&#x3e;
+    &#x3c;td colspan=3 class=&#x22;Proto&#x22; style=&#x22;padding-bottom: 20px;&#x22;&#x3e;#include &#x22;ems.h&#x22;  // Parallelism
+ in C is always user managed
+    &#x3c;/td&#x3e;
+&#x3c;/tr&#x3e;
+...</pre></li>
+    </ul>
+
+
+</div>
+
+<div class="apidocFooterDiv">
+    [ this document was created with
+    <a href="https://github.com/kaizhu256/node-utility2" target="_blank">utility2</a>
+    ]
+</div>
+</div>
